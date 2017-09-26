@@ -1,0 +1,79 @@
+Option Explicit
+
+Public Function OpenWorkBook(strWorkBookName As String) As Workbook
+    Dim wb As Workbook
+    If Not WorkBookExists(strWorkBookName) Then
+        'MsgBox ("Could not open " + strWorkBookName) 'not for now
+        Set OpenWorkBook = Nothing
+        Exit Function
+    End If
+    
+    If IsWorkbookOpen(strWorkBookName) Then
+        Set wb = Workbooks(strWorkBookName)
+    Else
+        Set wb = Workbooks.Open(strWorkBookName)
+    End If
+    wb.Activate
+    
+    Set OpenWorkBook = wb
+End Function
+
+Public Function CreateNewWorkBook(strWorkBookName As String) As Workbook
+    Dim wb As Workbook
+    If WorkBookExists(strWorkBookName) Then
+        ' workbook exists already so open it
+        Set wb = OpenWorkBook(strWorkBookName)
+    Else
+        Set wb = Workbooks.Add
+        With wb
+                .SaveAs FileName:=strWorkBookName _
+                , FileFormat:=xlOpenXMLWorkbook, CreateBackup:=False _
+                '.SaveAs Filename:=TempPath & "JAN 2012.xlsx" _
+                .ChangeFileAccess Mode:=xlReadWrite
+        End With
+    End If
+    wb.Activate
+    Set CreateNewWorkBook = wb
+End Function
+
+Function WorkBookExists(strWorkBookName As String) As Boolean
+    Dim bWbExists As Boolean: bWbExists = True
+    If Dir(strWorkBookName) = "" Then bWbExists = False
+    WorkBookExists = bWbExists
+End Function
+
+Function IsWorkbookOpen(strWorkBookName As String) As Boolean
+    'Returns TRUE if the workbook is open
+    Dim oXL As Excel.Application
+    Dim oBk As Workbook
+
+    On Error Resume Next
+    Set oXL = GetObject(, "Excel.Application")
+    If Err.Number <> 0 Then
+        'Excel is NOT open, so the workbook cannot be open
+        Err.Clear
+        IsWorkbookOpen = False
+    Else
+        'Excel is open, check if workbook is open
+        Set oBk = oXL.Workbooks(strWorkBookName)
+        If oBk Is Nothing Then
+            IsWorkbookOpen = False
+        Else
+            IsWorkbookOpen = True
+            Set oBk = Nothing
+        End If
+    End If
+    Set oXL = Nothing
+End Function
+
+Public Sub CloseWorkBookWithoutSaving(wbName As Workbook)
+        ' Because the Saved property is set to True, Excel responds as though the workbook has already been saved
+        ' and no changes have occurred since that last save, so no Save prompt.
+        wbName.Saved = True
+        wbName.Close SaveChanges:=False
+End Sub
+
+Public Sub CloseWorkbookWithSaving(wbName As Workbook)
+        wbName.Close SaveChanges:=True
+End Sub
+

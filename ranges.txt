@@ -1,0 +1,392 @@
+Option Explicit
+Const msMODULE   As String = "Ranges"
+
+Public Function GetDynRange(RngStartCell As Range) As Range
+    '/============================================================================================================
+    '/ This function returns a range starting from the startcell untill the last non-empty cell on that worksheet
+    '/============================================================================================================
+    Dim WS    As Worksheet
+    Set WS = RngStartCell.Worksheet
+    Set GetDynRange = WS.Range(RngStartCell, GetLastNonEmptyCellOnWorkSheet(WS))
+End Function
+
+Public Function GetLastNonEmptyCellOnWorkSheet(WS As Worksheet) As Range
+    '/===========================================================================================================
+    '/ This function returns the last non-empty cell on a worksheet
+    '/===========================================================================================================
+    Set GetLastNonEmptyCellOnWorkSheet = GetLastCell(WS.UsedRange, XlSearchOrder.xlByColumns + XlSearchOrder.xlByRows)
+End Function
+
+Function ClearRange(RangeName As String, Optional NumRows As Long = 0, Optional RowOff As Long = 0, Optional ColOff As Long = 0) As Long
+    '/===========================================================================================================
+    '/ This function clears all values from a range
+    '/===========================================================================================================
+    Dim DataRange   As Range
+    Dim NumCols     As Long
+ 
+    On Error GoTo RtnError
+ 
+    Set DataRange = Range(RangeName)
+    If NumRows = 0 Then NumRows = 1
+    NumCols = DataRange.Columns.Count
+ 
+    DataRange.offset(RowOff, ColOff).ClearContents
+    DataRange.Resize(NumRows, NumCols).Name = RangeName
+    Set DataRange = Nothing
+    ClearRange = 0
+    Exit Function
+ 
+RtnError:
+    ClearRange = 1
+End Function
+
+Public Function GetLastCell(InRange As Range, SearchOrder As XlSearchOrder, Optional ProhibitEmptyFormula As Boolean = False) As Range
+    '/===========================================================================================================
+    '/ This function returns the last non-empty cell in a range
+    '/===========================================================================================================
+    Set GetLastCell = FindValueInRange(InRange, "*", SearchOrder, ProhibitEmptyFormula)
+End Function
+
+Public Function FindValueInRange(InRange As Range, sToFind As String, SearchOrder As XlSearchOrder, _
+                                    Optional ProhibitEmptyFormula As Boolean = False) As Range
+    '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+    ' FindValueInRange
+    ' By Chip Pearson, chip@cpearson.com, www.cpearson.com
+    '
+    ' This returns the last used cell in a worksheet or range. If InRange
+    ' is a single cell, the last cell of the entire worksheet if found. If
+    ' InRange contains two or more cells, the last cell in that range is
+    ' returned.
+    ' If SearchOrder is xlByRows (= 1), the last cell is the last
+    ' (right-most) non-blank cell on the last row of data in the
+    ' worksheet's UsedRange. If SearchOrder is xlByColumns
+    ' (= 2), the last cell is the last (bottom-most) non-blank cell in the
+    ' last (right-most) column of the worksheet's UsedRange. If SearchOrder
+    ' is xlByColumns + xlByRows (= 3), the last cell is the intersection of
+    ' the last row and the last column. Note that this cell may not contain
+    ' any value.
+    ' If SearchOrder is anything other than xlByRows, xlByColumns, or
+    ' xlByRows+xlByColumns, an error 5 is raised.
+    '
+    ' ProhibitEmptyFormula indicates how to handle the case in which the
+    ' last cell is a formula that evaluates to an empty string. If this setting
+    ' is omitted for False, the last cell is allowed to be a formula that
+    ' evaluates to an empty string. If this setting is True, the last cell
+    ' must be either a static value or a formula that evaluates to a non-empty
+    ' string. The default is False, allowing the last cell to be a formula
+    ' that evaluates to an empty string.
+    '''''''''''''''''''''''''
+    ' Example:
+    '       a   b   c
+    '               d   e
+    '       f   g
+    '
+    ' If SearchOrder is xlByRows, the last cell is 'g'. If SearchOrder is
+    ' xlByColumns, the last cell is 'e'. If SearchOrder is xlByRows+xlByColumns,
+    ' the last cell is the intersection of the row containing 'g' and the column
+    ' containing 'e'. This cell has no value in this example.
+    '
+    '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+    Dim WS As Worksheet
+    Dim R As Range
+    Dim LastCell As Range
+    Dim LastR As Range
+    Dim LastC As Range
+    Dim SearchRange As Range
+    Dim LookIn As XlFindLookIn
+    Dim RR As Range
+    
+    Set WS = InRange.Worksheet
+    
+    If ProhibitEmptyFormula = False Then
+        LookIn = xlFormulas
+    Else
+        LookIn = xlValues
+    End If
+    
+    Select Case SearchOrder
+        Case XlSearchOrder.xlByColumns, XlSearchOrder.xlByRows, _
+                XlSearchOrder.xlByColumns + XlSearchOrder.xlByRows
+            ' OK
+        Case Else
+            Err.Raise 5
+            Exit Function
+    End Select
+    
+    With WS
+        If InRange.Cells.Count = 1 Then
+            Set RR = .UsedRange
+        Else
+           Set RR = InRange
+        End If
+        Set R = RR(RR.Cells.Count)
+        
+        If SearchOrder = xlByColumns Then
+            Set LastCell = RR.Find(what:=sToFind, after:=R, LookIn:=LookIn, LookAt:=xlPart, SearchOrder:=xlByColumns, _
+                                    SearchDirection:=xlPrevious, MatchCase:=False)
+        ElseIf SearchOrder = xlByRows Then
+            Set LastCell = RR.Find(what:=sToFind, after:=R, LookIn:=LookIn, LookAt:=xlPart, SearchOrder:=xlByRows, _
+                                    SearchDirection:=xlPrevious, MatchCase:=False)
+        ElseIf SearchOrder = xlByColumns + xlByRows Then
+            Set LastC = RR.Find(what:=sToFind, after:=R, LookIn:=LookIn, LookAt:=xlPart, SearchOrder:=xlByColumns, _
+                                    SearchDirection:=xlPrevious, MatchCase:=False)
+            Set LastR = RR.Find(what:=sToFind, after:=R, LookIn:=LookIn, LookAt:=xlPart, SearchOrder:=xlByRows, _
+                                    SearchDirection:=xlPrevious, MatchCase:=False)
+            Set LastCell = Application.Intersect(LastR.EntireRow, LastC.EntireColumn)
+        Else
+            Err.Raise 5
+            Exit Function
+        End If
+    End With
+    'LogInformation ("FindValueInRange: " + CStr(sToFind) + " " + LastCell.Address)
+    Set FindValueInRange = LastCell
+End Function
+
+Public Function RangeIsEmpty(ByVal SourceRange As Range) As Boolean
+      '/===========================================================================================================
+      '/ This function checks if a range is empty
+      '/===========================================================================================================
+      '/ Found at http://ewbi.blogs.com/develops/2006/03/determine_if_a_.html
+      Dim SpecialUsedRange      As Range
+      Dim OverlappingRange      As Range
+      Dim OverlappingRangeArea  As Range
+      Dim EmptyCellsRange       As Range
+      
+      If SourceRange Is Nothing Then
+        RangeIsEmpty = True
+        Exit Function
+      End If
+      
+      Set SpecialUsedRange = SourceRange.Worksheet.Range("A1", SourceRange.SpecialCells(xlCellTypeLastCell))
+      Set OverlappingRange = Intersect(SourceRange, SpecialUsedRange)
+      
+      If OverlappingRange Is Nothing Then
+        RangeIsEmpty = True
+        Exit Function
+      End If
+      
+      If OverlappingRange.Count = 1 Then
+        RangeIsEmpty = IsEmpty(OverlappingRange.Value)
+        Exit Function
+      End If
+      
+      For Each OverlappingRangeArea In OverlappingRange.Areas
+        If OverlappingRangeArea.Count = 1 Then
+          If Not IsEmpty(OverlappingRange.Value) Then
+            Exit Function
+          End If
+        Else
+          On Error Resume Next
+          Set EmptyCellsRange = OverlappingRangeArea.SpecialCells(xlCellTypeBlanks)
+          On Error GoTo 0
+          If Not EmptyCellsRange Is Nothing Then
+            If EmptyCellsRange.Count <> OverlappingRangeArea.Count Then
+              Exit Function
+            End If
+            Set EmptyCellsRange = Nothing
+          End If
+        End If
+      Next OverlappingRangeArea
+      RangeIsEmpty = True
+End Function
+
+Public Function GetHeadersOfRange(rngName As Range) As Range
+      '/===========================================================================================================
+      '/ This function returns the first row (aka headers) of a range
+      '/===========================================================================================================
+      Set GetHeadersOfRange = rngName.Rows(1)
+End Function
+
+Function ConvertToLetter(lCol As Long) As String
+    '/===========================================================================================================
+    '/ This function converts the column number to the letter
+    '/===========================================================================================================
+    ' for example:
+    '   1  -> A
+    '   26 -> Z
+    '   28 -> AB
+    '
+    ' found at: http://stackoverflow.com/questions/12796973/vba-function-to-convert-column-number-to-letter
+    '
+    Dim lAlpha As Long
+    Dim lRemainder As Long
+    lAlpha = Int(lCol / 27)
+    lRemainder = lCol - (lAlpha * 26)
+    If lAlpha > 0 Then
+        ConvertToLetter = Chr(lAlpha + 64)
+    End If
+    If lRemainder > 0 Then
+        ConvertToLetter = ConvertToLetter & Chr(lRemainder + 64)
+    End If
+End Function
+
+Function ColLetterToNum(ByVal sColLetter As String) As Long
+' Convert column letter to numeric
+    ColLetterToNum = ActiveWorkbook.Worksheets(1).Columns(sColLetter).Column
+End Function
+
+Function CopyToRange(vArr As Variant, RangeName As Range, Optional NumRows As Long = 0, _
+                    Optional NumCols As Long = 0, Optional ClearRange As Boolean = True, _
+                    Optional RowOff As Long = 0, Optional ColOff As Long = 0) As Long
+    '/===========================================================================================================
+    '/ This function copies an array into a range
+    '/===========================================================================================================
+    '/ This function assumes that the array starts at (0,0) otherwise it will offset columns and rows
+    '/
+    Dim tmpArr          As Variant
+    Dim IsArrayAlloc    As Boolean
+    
+    'On Error GoTo RtnError
+    If IsObject(vArr) = True Then
+            '/ OBJECT
+            If TypeOf vArr Is Excel.Range Then
+                tmpArr = vArr.Value2
+            Else
+                Exit Function
+            End If
+    ElseIf IsArray(vArr) = True Then
+            '/ ARRAY:If vArr is an array, ensure it is an allocated array.
+            IsArrayAlloc = (Not IsError(LBound(vArr)) And (LBound(vArr) <= UBound(vArr)))
+            If IsArrayAlloc = True Then
+                '/ The array is allocated.
+                tmpArr = vArr
+            Else
+                Exit Function
+            End If
+    End If
+    
+    If NumRows = 0 Then NumRows = UBound(tmpArr) - LBound(tmpArr) + 1
+    If NumCols = 0 Then
+        If NumberOfDimensions(tmpArr) > 1 Then
+            NumCols = UBound(tmpArr, 2) '- LBound(tmpArr, 2) + 1
+        'Else
+         '   NumCols = 1
+        End If
+    End If
+    
+    If ClearRange = True Then RangeName.offset(RowOff, ColOff).ClearContents
+    LogInformation (RangeName.offset(RowOff, ColOff).Resize(NumRows, NumCols).Address)
+    LogInformation (GetMessageText(tmpArr))
+    RangeName.offset(RowOff, ColOff).Resize(NumRows, NumCols).Value2 = tmpArr
+    CopyToRange = 0
+    Exit Function
+ 
+RtnError:
+    CopyToRange = 1
+End Function
+
+Function FindAll(SearchRange As Range, _
+                FindWhat As Variant, _
+                Optional LookIn As XlFindLookIn = xlValues, _
+                Optional LookAt As XlLookAt = xlWhole, _
+                Optional SearchOrder As XlSearchOrder = xlByRows, _
+                Optional MatchCase As Boolean = False, _
+                Optional BeginsWith As String = vbNullString, _
+                Optional EndsWith As String = vbNullString, _
+                Optional BeginEndCompare As VbCompareMethod = vbTextCompare) As Range
+    '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+    ' FindAll
+    ' This searches the range specified by SearchRange and returns a Range object
+    ' that contains all the cells in which FindWhat was found. The search parameters to
+    ' this function have the same meaning and effect as they do with the
+    ' Range.Find method. If the value was not found, the function return Nothing. If
+    ' BeginsWith is not an empty string, only those cells that begin with BeginWith
+    ' are included in the result. If EndsWith is not an empty string, only those cells
+    ' that end with EndsWith are included in the result. Note that if a cell contains
+    ' a single word that matches either BeginsWith or EndsWith, it is included in the
+    ' result.  If BeginsWith or EndsWith is not an empty string, the LookAt parameter
+    ' is automatically changed to xlPart. The tests for BeginsWith and EndsWith may be
+    ' case-sensitive by setting BeginEndCompare to vbBinaryCompare. For case-insensitive
+    ' comparisons, set BeginEndCompare to vbTextCompare. If this parameter is omitted,
+    ' it defaults to vbTextCompare. The comparisons for BeginsWith and EndsWith are
+    ' in an OR relationship. That is, if both BeginsWith and EndsWith are provided,
+    ' a match if found if the text begins with BeginsWith OR the text ends with EndsWith.
+    '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+    
+    Dim FoundCell As Range
+    Dim FirstFound As Range
+    Dim LastCell As Range
+    Dim ResultRange As Range
+    Dim XLookAt As XlLookAt
+    Dim Include As Boolean
+    Dim CompMode As VbCompareMethod
+    Dim Area As Range
+    Dim MaxRow As Long
+    Dim MaxCol As Long
+    Dim BeginB As Boolean
+    Dim EndB As Boolean
+    
+    
+    CompMode = BeginEndCompare
+    If BeginsWith <> vbNullString Or EndsWith <> vbNullString Then
+        XLookAt = xlPart
+    Else
+        XLookAt = LookAt
+    End If
+    
+    ' this loop in Areas is to find the last cell
+    ' of all the areas. That is, the cell whose row
+    ' and column are greater than or equal to any cell
+    ' in any Area.
+    
+    For Each Area In SearchRange.Areas
+        With Area
+            If .Cells(.Cells.Count).Row > MaxRow Then
+                MaxRow = .Cells(.Cells.Count).Row
+            End If
+            If .Cells(.Cells.Count).Column > MaxCol Then
+                MaxCol = .Cells(.Cells.Count).Column
+            End If
+        End With
+    Next Area
+    Set LastCell = SearchRange.Worksheet.Cells(MaxRow, MaxCol)
+    
+    On Error GoTo 0
+    Set FoundCell = SearchRange.Find(what:=FindWhat, _
+            after:=LastCell, _
+            LookIn:=LookIn, _
+            LookAt:=XLookAt, _
+            SearchOrder:=SearchOrder, _
+            MatchCase:=MatchCase)
+    
+    If Not FoundCell Is Nothing Then
+        Set FirstFound = FoundCell
+        Do Until False ' Loop forever. We'll "Exit Do" when necessary.
+            Include = False
+            If BeginsWith = vbNullString And EndsWith = vbNullString Then
+                Include = True
+            Else
+                If BeginsWith <> vbNullString Then
+                    If StrComp(Left(FoundCell.Text, Len(BeginsWith)), BeginsWith, BeginEndCompare) = 0 Then
+                        Include = True
+                    End If
+                End If
+                If EndsWith <> vbNullString Then
+                    If StrComp(Right(FoundCell.Text, Len(EndsWith)), EndsWith, BeginEndCompare) = 0 Then
+                        Include = True
+                    End If
+                End If
+            End If
+            If Include = True Then
+                If ResultRange Is Nothing Then
+                    Set ResultRange = FoundCell
+                Else
+                    Set ResultRange = Application.Union(ResultRange, FoundCell)
+                End If
+            End If
+            Set FoundCell = SearchRange.FindNext(after:=FoundCell)
+            If (FoundCell Is Nothing) Then
+                Exit Do
+            End If
+            If (FoundCell.Address = FirstFound.Address) Then
+                Exit Do
+            End If
+    
+        Loop
+    End If
+        
+    Set FindAll = ResultRange
+
+End Function
+
+

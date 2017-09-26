@@ -1,0 +1,164 @@
+Option Explicit
+
+Public Sub ProcessTemplate()
+    Dim wbMDS       As Workbook
+    Dim wbTemplate  As Workbook
+    Dim wbResult    As Workbook
+    
+    ' MasterInput Worksheets
+    Dim wsMI            As Worksheet
+    ' Template Worksheets
+    Dim wsSOW           As Worksheet
+    Dim wsSizingParams  As Worksheet
+    ' Result Worksheets
+    Dim wsOutput        As Worksheet
+    
+    Dim rngCurrentRow       As Range
+    Dim rngCurrentCol       As Range
+    Dim rngColTShirtSize    As Range
+    Dim rngTmp              As Range
+    Dim rngSOW              As Range
+    Dim rngSOWrow           As Range
+    Dim rngOutput           As Range
+    Dim rngMasterInputRows  As Range
+        
+    Dim vTargetDate         As Variant
+    Dim vProjectUid         As Variant
+    Dim vTShirtSize         As Variant
+    Dim vLocation           As Variant
+    Dim vTmpTemplateTask    As Variant
+    Dim vSOWRow             As Variant
+    Dim vProfDesc           As Variant
+    Dim vTariffcode         As Variant
+    Dim vEffort             As Variant
+    Dim vFiles              As Variant
+    Dim vTmpFiles           As Variant
+        
+    Dim strTemplateTask     As String
+    Dim strTemplateToSearch As String
+    Dim strSizeModel        As String
+        
+    Dim cOutput           As New Collection
+        
+    Dim ret                 As Long
+    Dim lOutputRow          As Long: lOutputRow = 1
+       
+    'Create a list of files in the current dir
+    vFiles = GetFileList(cstrPATH)
+    ' wsFiles.Cells.ClearContents 'clear the sheet with previous files
+    
+    'Open the workbooks
+    Set wbMDS = OpenWorkBook(cstrPATH + "Master Data Sheet_07092015.xlsx")
+    Set wbResult = CreateNewWorkBook(cstrPATH + "Output-" + Format(Now, "yyyyMMddhhmm") + ".xlsx")
+    
+    'Open the worksheets
+    Set wsMI = wbMDS.Worksheets("MasterInput")
+    InitialiseMasterInputHeaders wsMI
+    Set wsOutput = wbResult.Worksheets("Sheet1")
+        
+    'Go over each row in the MasterInput sheet
+    For Each rngCurrentRow In GetDynRange(wsMI.Range("A2")).Rows ' first row is the headers
+        vTargetDate = rngCurrentRow.Cells(1, GetColHdr("Task Target")).Value
+        vProjectUid = rngCurrentRow.Cells(1, GetColHdr("ProjectUID")).Value
+        vTShirtSize = rngCurrentRow.Cells(1, GetColHdr("T-Shirt Model")).Value
+        vLocation = rngCurrentRow.Cells(1, GetColHdr("Location")).Value
+         
+        'get the correct name + path for the template
+        vTmpTemplateTask = rngCurrentRow.Cells(1, GetColHdr("Template Task"))
+        strTemplateToSearch = Replace(Replace(CStr(vTmpTemplateTask), "ITM-TP.", ""), " [Template]", "")
+        strTemplateToSearch = strTemplateToSearch + " (Template)"
+        LogInformation (GetMessageText(vFiles))
+        vTmpFiles = FilterArray(strTemplateToSearch, 1, vFiles, False)
+        If vTmpFiles Is Nothing Then
+            LogInformation ("Template not found: " + strTemplateToSearch)
+        Else
+            ' We'll use the last element. That should be the latest file
+            strTemplateTask = CStr(vTmpFiles(UBound(vTmpFiles)))
+            LogInformation ("found: " + strTemplateTask)
+        End If
+        
+        'Open the template file
+        'LogInformation (strTemplateTask)
+        Set wbTemplate = OpenWorkBook(strTemplateTask)
+        If Not wbTemplate Is Nothing Then
+            Set wsSizingParams = wbTemplate.Worksheets("SizingParameter")
+            Set wsSOW = wbTemplate.Worksheets("SOW")
+            'Goto the SizingParameter Tab and look for the T-shirt size
+            Set rngColTShirtSize = FindValueInRange(wsSizingParams.Range("C2:Z2"), CStr(vProjectUid), xlByRows + xlByColumns, True)
+            'Set rngColTShirtSize = FindAll(wsSizingParams.Range("C2:Z2"), vProjectUid)
+            If RangeIsEmpty(rngColTShirtSize) Then
+                ' Project uid is not used, so we switch to tshirt size
+                Set rngColTShirtSize = FindValueInRange(wsSizingParams.Range("C2:Z2"), GetFullTShirtSize(CStr(vTShirtSize)), xlByColumns)
+                'Set rngColTShirtSize = FindAll(wsSizingParams.Range("C2:Z2"), GetFullTShirtSize(CStr(vTShirtSize)))
+                If RangeIsEmpty(rngColTShirtSize) Then
+                    ' empty again, so something went wrong
+                    ' goto next row in MasterInput
+                    ' Next rngCurrentRow
+                    strSizeModel = "ERROR"
+                Else
+                    strSizeModel = "Tshirt"
+                End If
+            Else
+                strSizeModel = "ProjectUID"
+            End If
+            
+            ' Copy the T-Shirt Column to the actual column
+            Set rngTmp = GetDynRange(rngColTShirtSize) '/Start from the tshirt cell to the end of the worksheet
+            Set rngTmp = rngTmp.offset(1, 0).Resize(rngTmp.Rows.Count - 1, 1) 'Remove the t)shirt size header and keep first column
+            'LogInformation ("tshirt rng2 :" + rngTmp.Address)
+            rngTmp.Copy wsSizingParams.Range("C3")
+                            
+            ' Copy the SOW rows to the output collection
+            Set rngSOW = GetDynRange(wsSOW.Range("A4"))
+            For Each rngSOWrow In rngSOW.Rows
+                vSOWRow = rngSOWrow.Cells(1, ColLetterToNum("A")).Value
+                vProfDesc = rngSOWrow.Cells(1, ColLetterToNum("F")).Value
+                vTariffcode = rngSOWrow.Cells(1, ColLetterToNum("G")).Value
+                'vEffort = rngSOWrow.Cells(1, ColLetterToNum("H")).Value
+                ' If the profile and tariff code is not filled in, skip the line
+                If vSOWRow = "" Or vProfDesc = "" Or vTariffcode = "" Then GoTo NextIteration
+                
+                ' Add the values to the Output collection
+                cOutput.Add vTargetDate
+                cOutput.Add vProjectUid
+                cOutput.Add vLocation
+                cOutput.Add vSOWRow
+                cOutput.Add rngSOWrow.Cells(1, ColLetterToNum("E")).Value
+                cOutput.Add vProfDesc
+                cOutput.Add vTariffcode
+                cOutput.Add rngSOWrow.Cells(1, ColLetterToNum("H")).Value
+                cOutput.Add rngSOWrow.Cells(1, ColLetterToNum("I")).Value
+                cOutput.Add rngSOWrow.Cells(1, ColLetterToNum("J")).Value
+                cOutput.Add rngSOWrow.Cells(1, ColLetterToNum("K")).Value
+                cOutput.Add rngSOWrow.Cells(1, ColLetterToNum("L")).Value
+                cOutput.Add rngSOWrow.Cells(1, ColLetterToNum("M")).Value
+                cOutput.Add vTShirtSize
+                cOutput.Add strSizeModel
+                cOutput.Add strTemplateTask
+                           
+                ' convert the output collection to an array and write it to the output worksheet
+                Set rngOutput = wsOutput.Range("A" + CStr(lOutputRow))
+                ret = CopyToRange(to1DArray(cOutput), rngOutput)
+                'LogInformation (rngOutput.Address)
+                lOutputRow = lOutputRow + 1
+NextIteration:
+                Set cOutput = Nothing
+             Next rngSOWrow
+             Call CloseWorkBookWithoutSaving(wbTemplate)
+        Else
+            ' Template not found, log message
+            LogInformation ("NOT FOUND ProjID: " + CStr(vProjectUid) + " Template: " + strTemplateTask)
+        End If
+    Next rngCurrentRow
+    'Close the workbooks
+    
+    ' do some formatting on the output worksheet
+    Set rngOutput = GetDynRange(wsOutput.Range("A1")).Columns
+    For Each rngCurrentCol In rngOutput
+        rngCurrentCol.AutoFit
+    Next rngCurrentCol
+    'wsOutput.Range("A").NumberFormat = "Date"
+    
+   Call CloseWorkbookWithSaving(wbResult)
+   Call CloseWorkBookWithoutSaving(wbMDS)
+End Sub

@@ -1,0 +1,39 @@
+Option Explicit
+
+Public Const cstrPATH = "C:\Temp\" ' don't forget the \ at the end
+
+'/===========================================================================================================
+'/ Public declaration to find the colums afterwards
+'/===========================================================================================================
+Public vArrayMIHeaders()        As Variant
+
+Function GetMessageText(var As Variant) As String
+    'Assumes a vector array
+    On Error GoTo EarlyExit
+
+    Dim sMsg As String
+    Dim v As Variant
+
+    For Each v In var
+        If Not v = vbNullString Then
+            sMsg = sMsg & v & vbCr
+        End If
+    Next
+
+EarlyExit:
+    If Err.Number = 0 Then
+        GetMessageText = sMsg
+    Else:
+        GetMessageText = "invalid array"
+    End If
+
+End Function
+
+Sub LogInformation(LogMessage As String)
+    Const LogFileName As String = "C:\Temp\TEXTFILE.LOG"
+    Dim FileNum As Integer
+    FileNum = FreeFile ' next file number
+    Open LogFileName For Append As #FileNum ' creates the file if it doesn't exist
+    Print #FileNum, LogMessage ' write information at the end of the text file
+    Close #FileNum ' close the file
+End Sub

@@ -1,0 +1,24 @@
+Option Explicit
+
+Public Function GetFullTShirtSize(strSize As String) As String
+    Select Case strSize
+        Case "XXS"
+            GetFullTShirtSize = "ExtraExtraSmall"
+        Case "XS"
+            GetFullTShirtSize = "ExtraSmall"
+        Case "S"
+            GetFullTShirtSize = "Small"
+        Case "M"
+            GetFullTShirtSize = "Medium"
+        Case "L"
+            GetFullTShirtSize = "Large"
+        Case "XL"
+            GetFullTShirtSize = "ExtraLarge"
+        Case "XXL"
+            GetFullTShirtSize = "ExtraExtraLarge"
+    End Select
+End Function
+
+
+
+
